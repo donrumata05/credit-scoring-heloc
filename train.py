@@ -26,8 +26,8 @@ def main():
     )
 
     joblib.dump(
-        imputer,
-        "artifacts/imputer.pkl"
+        imputer.statistics_,
+        "artifacts/imputer_values.pkl"
     )
 
     print("\n===== XGBoost =====")
