@@ -31,6 +31,9 @@ class CreditScoringInference:
         self.feature_names = joblib.load(
             ARTIFACTS_DIR / "feature_names.pkl"
         )
+        self.imputer_values = joblib.load(
+            ARTIFACTS_DIR / "imputer_values.pkl"
+        )
 
 
     def preprocess(self, client_df):
@@ -66,9 +69,11 @@ class CreditScoringInference:
 
         client_df = client_df[self.feature_names]
 
-
-        client_df = self.imputer.transform(
-            client_df
+        client_df = client_df.fillna(
+            pd.Series(
+                self.imputer_values,
+                index=self.feature_names
+            )
         )
 
 
