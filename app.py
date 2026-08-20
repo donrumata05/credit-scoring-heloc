@@ -1,8 +1,11 @@
 import streamlit as st
 import requests
+from src.inference import CreditScoringInference
+import pandas as pd
 
 
 API_URL = "http://127.0.0.1:8000"
+credit_model = CreditScoringInference()
 
 
 st.set_page_config(
@@ -321,157 +324,103 @@ if submitted:
         "PercentTradesWBalance": percent_balance
     }
 
-
     with st.spinner("Получаем прогноз модели..."):
 
         try:
 
-            response = requests.post(
-                f"{API_URL}/predict",
-                json=client_data,
-                timeout=120
-            )
+            client_df = pd.DataFrame([client_data])
 
+            result = credit_model.predict(client_df)
 
-            if response.status_code != 200:
+            st.divider()
 
-                st.error(
-                    f"Ошибка API: {response.text}"
+            st.subheader("Результат оценки")
+
+            result_col1, result_col2 = st.columns(2)
+
+            with result_col1:
+
+                probability = result["probability"]
+                prediction = result["prediction"]
+                threshold = result["threshold"]
+
+                st.metric(
+                    "Вероятность плохого кредита",
+                    f"{probability:.1%}"
                 )
 
-            else:
-
-                result = response.json()
-
-                st.divider()
-
-                st.subheader("Результат оценки")
-
-
-                result_col1, result_col2 = st.columns(2)
-
-                with result_col1:
-
-                    probability = result["probability"]
-                    prediction = result["prediction"]
-                    threshold = result["threshold"]
-
-
-                    st.metric(
-                        "Вероятность плохого кредита",
-                        f"{probability:.1%}"
-                    )
-
-
-                    st.caption(
-                        f"Порог классификации: {threshold:.1%}"
-                    )
-
-
-                    if prediction == "Bad":
-
-                        st.error(
-                            "Решение модели: высокий кредитный риск"
-                        )
-
-                    else:
-
-                        st.success(
-                            "Решение модели: низкий кредитный риск"
-                        )
-
-                with result_col2:
-
-                    st.subheader("Объяснение AI")
-
-                    st.write(
-                        result["llm_explanation"]
-                    )
-
-                st.divider()
-
-                st.subheader("Основные факторы решения")
-
-
-                top_factors = result.get(
-                    "top_factors",
-                    []
+                st.caption(
+                    f"Порог классификации: {threshold:.1%}"
                 )
 
+                if prediction == "Bad":
 
-                if top_factors:
-
-                    for factor in top_factors:
-
-                        feature = factor["feature"]
-                        value = factor["value"]
-                        shap_value = factor["shap"]
-
-
-                        if shap_value > 0:
-
-                            impact = "увеличивает риск"
-
-                        else:
-
-                            impact = "снижает риск"
-
-
-                        with st.container():
-
-                            factor_col1, factor_col2, factor_col3 = st.columns(
-                                [3, 1, 2]
-                            )
-
-
-                            with factor_col1:
-
-                                st.write(
-                                    f"**{feature}**"
-                                )
-
-
-                            with factor_col2:
-
-                                st.write(
-                                    f"`{value:g}`"
-                                )
-
-
-                            with factor_col3:
-
-                                st.write(
-                                    f"{impact}  \n"
-                                    f"SHAP: `{shap_value:+.3f}`"
-                                )
-
+                    st.error(
+                        "Решение модели: высокий кредитный риск"
+                    )
 
                 else:
 
-                    st.info(
-                        "Информация о SHAP-факторах отсутствует."
+                    st.success(
+                        "Решение модели: низкий кредитный риск"
                     )
 
+            with result_col2:
 
-        except requests.exceptions.ConnectionError:
+                st.subheader("Объяснение AI")
 
-            st.error(
-                "Не удалось подключиться к FastAPI. "
-                "Убедитесь, что API запущен на "
-                f"{API_URL}"
+                st.write(
+                    result["llm_explanation"]
+                )
+
+            st.divider()
+
+            st.subheader("Основные факторы решения")
+
+            top_factors = result.get(
+                "top_factors",
+                []
             )
 
+            if top_factors:
 
-        except requests.exceptions.Timeout:
+                for factor in top_factors:
 
-            st.error(
-                "API не ответил вовремя. "
-                "Генерация объяснения GigaChat может занимать некоторое время."
-            )
+                    feature = factor["feature"]
+                    value = factor["value"]
+                    shap_value = factor["shap"]
 
+                    if shap_value > 0:
+                        impact = "увеличивает риск"
+                    else:
+                        impact = "снижает риск"
+
+                    with st.container():
+
+                        factor_col1, factor_col2, factor_col3 = st.columns(
+                            [3, 1, 2]
+                        )
+
+                        with factor_col1:
+                            st.write(f"**{feature}**")
+
+                        with factor_col2:
+                            st.write(f"`{value:g}`")
+
+                        with factor_col3:
+                            st.write(
+                                f"{impact}  \n"
+                                f"SHAP: `{shap_value:+.3f}`"
+                            )
+
+            else:
+
+                st.info(
+                    "Информация о SHAP-факторах отсутствует."
+                )
 
         except Exception as e:
 
             st.error(
-                f"Ошибка: {e}"
+                f"Ошибка при выполнении предсказания: {e}"
             )
